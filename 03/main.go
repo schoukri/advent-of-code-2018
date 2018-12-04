@@ -19,7 +19,6 @@ type Claim struct {
 	ID   int
 	X, Y int
 	W, H int
-	M    *mat.Dense
 }
 
 func main() {
@@ -56,22 +55,12 @@ func main() {
 	// the "all" matrix will hold a presence indicator for all claims
 	// (each claim will add 1 to every cell it occupies)
 	all := mat.NewDense(maxWidth, maxHeight, nil)
-
-	// create a matrix for each claim, setting the cells they occupy
-	for idx, c := range claims {
-
-		m := mat.NewDense(maxWidth, maxHeight, nil)
+	for _, c := range claims {
 		for i := c.X; i < c.X+c.W; i++ {
 			for j := c.Y; j < c.Y+c.H; j++ {
-				m.Set(i, j, 1)
+				all.Set(i, j, 1+all.At(i, j))
 			}
 		}
-
-		claims[idx].M = m
-
-		// add this claim matrix to the "all" matrix
-		all.Add(all, m)
-
 	}
 
 	rows, cols := all.Dims()
@@ -88,22 +77,19 @@ func main() {
 	fmt.Printf("part 1: %d\n", overlap)
 
 	// PART 2: find a claim that is NOT overlapped by any other claim
+	// (ALL cells for a given claim must equal 1)
 CLAIM:
 	for _, c := range claims {
-
-		product := mat.NewDense(maxWidth, maxHeight, nil)
-
-		// multiply the corresponding cells of this claim matrix and the all matrix
-		product.MulElem(c.M, all)
-
-		// the product matrix will equal the claim matrix *if* the claim is NOT overlapped
-		if mat.Equal(c.M, product) {
-			fmt.Printf("part 2: %d\n", c.ID)
-			break CLAIM
+		for i := c.X; i < c.X+c.W; i++ {
+			for j := c.Y; j < c.Y+c.H; j++ {
+				if all.At(i, j) > 1 {
+					continue CLAIM
+				}
+			}
 		}
-
+		fmt.Printf("part 2: %d\n", c.ID)
+		break CLAIM
 	}
-
 }
 
 func readFile(path string) ([]string, error) {
@@ -134,7 +120,7 @@ func mustParseLine(line string) Claim {
 
 	matches := claimRegexp.FindStringSubmatch(line)
 	if matches == nil {
-		log.Fatalf("line not be parsed: %s", line)
+		log.Fatalf("cannot parse line: %s", line)
 	}
 
 	claim := Claim{
