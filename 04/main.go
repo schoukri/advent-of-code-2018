@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-var re = regexp.MustCompile(`Guard \#(\d+) begins shift`)
+var guardRegexp = regexp.MustCompile(`Guard \#(\d+) begins shift`)
 
 type kv struct {
 	Key   int
@@ -39,7 +39,7 @@ LINE:
 		line := lines[i]
 		i++
 
-		matches := re.FindStringSubmatch(line)
+		matches := guardRegexp.FindStringSubmatch(line)
 		if matches == nil {
 			log.Fatal("no matches for guard")
 		}
@@ -72,13 +72,8 @@ LINE:
 	}
 
 	winner := Top(minutes)
-	fmt.Printf("winner: id=%d, mins=%d\n", winner.Key, winner.Value)
 
-	winnerHist := hist[winner.Key]
-
-	topMin := Top(winnerHist)
-
-	fmt.Printf("topmin: min=%d, count=%d\n", topMin.Key, topMin.Value)
+	topMin := Top(hist[winner.Key])
 
 	part1 := winner.Key * topMin.Key
 	fmt.Printf("part 1: %d\n", part1)
@@ -91,9 +86,9 @@ LINE:
 		mostMinPerGuard[id] = top.Value
 	}
 
-	p2 := Top(mostMinPerGuard)
+	winner2 := Top(mostMinPerGuard)
 
-	part2 := p2.Key * topMinPerGuard[p2.Key]
+	part2 := winner2.Key * topMinPerGuard[winner2.Key]
 	fmt.Printf("part 2: %d\n", part2)
 
 }
@@ -133,16 +128,6 @@ func readFile(path string) ([]string, error) {
 	}
 
 	return lines, nil
-}
-
-func mustParseLine(line string) []string {
-
-	matches := re.FindStringSubmatch(line)
-	if matches == nil {
-		log.Fatalf("cannot parse line: %s", line)
-	}
-
-	return matches
 }
 
 func mustParseInt(s string) int {
