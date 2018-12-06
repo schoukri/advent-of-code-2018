@@ -66,6 +66,8 @@ func main() {
 
 	rows, cols := grid.Dims()
 
+	// for each cell on the grid, calculate the distance to each Point
+	// and store the ID of the Point with the shortest distance.
 	for i := 0; i < rows; i++ {
 		for j := 0; j < cols; j++ {
 
@@ -84,18 +86,19 @@ func main() {
 
 			var pointID int
 			// get the two points with the shortest distance
-			kvs := SmallestNByValue(pointDist, 2)
+			pointIDs := KeysSortedByValueAsc(pointDist)
 
-			// check the 2 shortest distances to see if they are the same
-			if kvs[0].Value == kvs[1].Value {
+			//fmt.Printf("pk: %#v\n", pk)
+			// check the top 2 points with the shortest distance to see if they are the same distance
+			if pointDist[pointIDs[0]] == pointDist[pointIDs[1]] {
 				// it's a tie! Set the pointID to a negative value to make it easy to recognize
 				pointID = -1
 			} else {
-				pointID = kvs[0].Key
+				pointID = pointIDs[0]
 			}
 			grid.Set(i, j, float64(pointID))
 
-			// if this point is on the edge of the grid, it has infinite areaPerPoint
+			// if this point is on the edge of the grid, it has infinite area
 			if (i == 0 || j == 0) || (i == (rows-1) || j == (cols-1)) {
 				pointIsInfinite[pointID] = true
 			}
@@ -108,16 +111,17 @@ func main() {
 		for j := 0; j < cols; j++ {
 			id := int(grid.At(i, j))
 			if pointIsInfinite[id] {
-
 				continue
 			}
 			areaPerPoint[id]++
 		}
 	}
 
-	pointWithBiggestArea := BiggestByValue(areaPerPoint)
+	// get the point id with largest area
+	pointIDs := KeysSortedByValueDesc(areaPerPoint)
+	areaSize := areaPerPoint[pointIDs[0]]
 
-	fmt.Printf("part 1: %d\n", pointWithBiggestArea.Value)
+	fmt.Printf("part 1: %d\n", areaSize)
 	fmt.Printf("part 2: %d\n", regionSize)
 
 }
@@ -181,17 +185,38 @@ func BiggestByValue(input map[int]int) kv {
 	return output[0]
 }
 
-func SmallestNByValue(input map[int]int, n int) []kv {
-	output := make([]kv, 0)
+func KeysSortedByValueDesc(input map[int]int) []int {
+	kvs := make([]kv, 0)
 	for k, v := range input {
-		output = append(output, kv{k, v})
+		kvs = append(kvs, kv{k, v})
 	}
 
-	sort.Slice(output, func(i, j int) bool {
-		return output[i].Value < output[j].Value
+	sort.Slice(kvs, func(i, j int) bool {
+		return kvs[i].Value > kvs[j].Value
 	})
 
-	return output[0:n]
+	kk := make([]int, len(kvs))
+	for i, k := range kvs {
+		kk[i] = k.Key
+	}
+	return kk
+}
+
+func KeysSortedByValueAsc(input map[int]int) []int {
+	kvs := make([]kv, 0)
+	for k, v := range input {
+		kvs = append(kvs, kv{k, v})
+	}
+
+	sort.Slice(kvs, func(i, j int) bool {
+		return kvs[i].Value < kvs[j].Value
+	})
+
+	kk := make([]int, len(kvs))
+	for i, k := range kvs {
+		kk[i] = k.Key
+	}
+	return kk
 }
 
 func mustParseInt(s string) int {
