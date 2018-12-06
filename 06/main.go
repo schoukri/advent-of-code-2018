@@ -60,10 +60,9 @@ func main() {
 	}
 
 	pointIsInfinite := make(map[int]bool)
-	areaPerPoint := make(map[int]int)
-	grid := mat.NewDense(maxWidth, maxHeight, nil)
 	var regionSize int
 
+	grid := mat.NewDense(maxWidth, maxHeight, nil)
 	rows, cols := grid.Dims()
 
 	// for each cell on the grid, calculate the distance to each Point
@@ -88,7 +87,6 @@ func main() {
 			// get the two points with the shortest distance
 			pointIDs := KeysSortedByValueAsc(pointDist)
 
-			//fmt.Printf("pk: %#v\n", pk)
 			// check the top 2 points with the shortest distance to see if they are the same distance
 			if pointDist[pointIDs[0]] == pointDist[pointIDs[1]] {
 				// it's a tie! Set the pointID to a negative value to make it easy to recognize
@@ -107,6 +105,7 @@ func main() {
 
 	// get the total area for each point
 	// (points with infinite area are disqualified)
+	areaPerPoint := make(map[int]int)
 	for i := 0; i < rows; i++ {
 		for j := 0; j < cols; j++ {
 			id := int(grid.At(i, j))
@@ -170,19 +169,6 @@ func readFile(path string) ([]string, error) {
 type kv struct {
 	Key   int
 	Value int
-}
-
-func BiggestByValue(input map[int]int) kv {
-	output := make([]kv, 0)
-	for k, v := range input {
-		output = append(output, kv{k, v})
-	}
-
-	sort.Slice(output, func(i, j int) bool {
-		return output[i].Value > output[j].Value
-	})
-
-	return output[0]
 }
 
 func KeysSortedByValueDesc(input map[int]int) []int {
