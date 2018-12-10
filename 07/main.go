@@ -15,6 +15,58 @@ import (
 	"github.com/stevenle/topsort"
 )
 
+type Job struct {
+	ID string
+	// Started bool
+	Done    bool
+	Seconds int
+	Start   int
+	End     int
+}
+
+func NewJob(id string) *Job {
+	j := &Job{ID: id}
+
+	// Convert "A", "B", "C", etc to ASCII numbers (65, 66, 67, etc)
+	// Then subtract the offset value 4 (or 64 for the sample data)
+	// to get the number of seconds required to finish the job.
+	bytes := []byte(j.ID)
+	j.Seconds = int(bytes[0]) - jobSecondsOffset
+
+	return j
+
+}
+
+type Queue struct {
+	Workers []*Worker
+	Done    map[string]bool
+	Deps    map[string][]string
+}
+
+func NewQueue(deps map[string][]string, numWorkers int) *Queue {
+	q := &Queue{
+		Workers: make([]*Worker, 0),
+		Done:    make(map[string]bool),
+		Deps:    deps,
+	}
+
+	for i := 0; i < numWorkers; i++ {
+		q.Workers = append(q.Workers, &Worker{ID: i})
+	}
+
+	return q
+}
+
+type Worker struct {
+	ID   int
+	Jobs []*Job
+}
+
+var (
+	numWorkers       = 5
+	jobSecondsOffset = 4
+)
+
 func main() {
 
 	filePath := flag.String("file", "input.txt", "file containing the input data")
@@ -25,8 +77,6 @@ func main() {
 		log.Fatalf("cannot read file %s: %v", *filePath, err)
 	}
 
-	numWorkers := 5
-	jobSecondsOffset := 4
 	if *filePath == "sample.txt" {
 		numWorkers = 2
 		jobSecondsOffset = 64
@@ -112,131 +162,161 @@ LOOP:
 
 	fmt.Printf("part 1: %s\n", strings.Join(jobs, ""))
 
-	workers := make([]int, numWorkers)
+	queue := NewQueue(jobDeps, numWorkers)
 
-	// Setup a map of the number of seconds required to process each job.
-	// A = 61 seconds, B = 62 seconds, C = 63 seconds, etc.
-	// We could setup a map manually, but that's no fun
-	// Instead, simply convert each job (letter) to its ASCII number equivalent,
-	// then subtract 4 (or 64 for the sample data) to get the correct number of seconds.
-	jobSeconds := make(map[string]int)
-	for _, job := range jobs {
-		bytes := []byte(job)
-		jobSeconds[job] = int(bytes[0]) - jobSecondsOffset
-		fmt.Printf("job %s seconds = %d (deps: %v)\n", job, jobSeconds[job], jobDeps[job])
-	}
+CLOCK:
+	for clock := 0; ; clock++ {
 
-	done := make(map[string]bool)
-	runningJob := make(map[int]string)
-
-QUEUE:
-	for {
-
-		fmt.Printf("running jobs: %#v\n", runningJob)
-		readyJobs := make([]string, 0)
-
-	JOB:
-		for job, deps := range jobDeps {
-
-			if done[job] {
-				continue JOB
-			}
-
-			notDone := make([]string, 0)
-
-		DEP:
-			for _, dep := range deps {
-				for _, job := range runningJob {
-					if job == dep {
-						continue DEP
-					}
-				}
-				if !done[dep] {
-					notDone = append(notDone, dep)
-				}
-			}
-
-			if len(notDone) == 1 {
-				readyJobs = append(readyJobs, notDone[0])
-			}
-
-		}
-
-		sort.Strings(readyJobs)
-		fmt.Printf("readyJobs: %#v\n", readyJobs)
-
-		// do the work
-		for _, job := range readyJobs {
-			workerIdx := GetWorker(workers, runningJob)
-			if workerIdx == -1 {
-				fmt.Printf("worker not available for job %s (skip for now)\n", job)
+		// close any running jobs that have reached their end time
+		runningJobs := queue.GetRunningJobs()
+		for _, job := range runningJobs {
+			if job.End > clock {
+				// job is still running
 				continue
 			}
-			workers[workerIdx] += jobSeconds[job]
-			fmt.Printf("started job %s, worker=%d, seconds=%d, total=%d\n", job, workerIdx, jobSeconds[job], workers[workerIdx])
-
-			runningJob[workerIdx] = job
+			if clock > job.End {
+				log.Fatalf("current clock %d is after job end %d", clock, job.End)
+			}
+			fmt.Printf("[%04d] finished job %s\n", clock, job.ID)
+			job.Done = true
+			queue.Done[job.ID] = true
 		}
 
-		// get the lowest time for the workers that are currently running job
-		doneTime := math.MaxInt32
-		for workerIdx := range runningJob {
-			if workers[workerIdx] < doneTime {
-				doneTime = workers[workerIdx]
+		jobs := queue.GetReadyJobs()
+
+		if len(jobs) == 0 {
+			running := queue.GetRunningJobs()
+			if len(running) == 0 {
+				fmt.Printf("[%04d] no jobs remaining\n", clock)
+				break CLOCK
 			}
 		}
 
-		fmt.Printf("doneTime: %d\n", doneTime)
+		minJobEnd := math.MaxInt32
+		for _, job := range jobs {
+			worker := queue.GetWorker()
+			if worker == nil {
+				fmt.Printf("[%04d] skipping job %s because no worker is available\n", clock, job.ID)
+				continue CLOCK
+			}
 
-		for workerIdx, job := range runningJob {
-			if workers[workerIdx] == doneTime {
-				done[job] = true
-				delete(runningJob, workerIdx)
-				fmt.Printf("finished running job %s, worker=%d, time=%d\n", job, workerIdx, workers[workerIdx])
+			fmt.Printf("[%04d] started job %s with worker %d\n", clock, job.ID, worker.ID)
+
+			// job.Started = true
+			job.Start = clock
+			job.End = clock + job.Seconds
+			worker.AddJob(job)
+
+			if job.End < minJobEnd {
+				minJobEnd = job.End
 			}
 		}
+	}
 
-		// make the workers wait that did not do any work for this loop
-		// (update ther time to same time as the worker who did work with the max time)
-		// sort.Ints(workerSeconds)
-		// waitSeconds := workerSeconds[0]
-		// fmt.Printf("workerSeconds: %v\n", workerSeconds)
-		for i := range workers {
-			if _, ok := runningJob[i]; ok {
+	// the total time spent is the max end time of all the last jobs
+	maxEndTime := 0
+	for _, worker := range queue.Workers {
+		job := worker.GetLastJob()
+		if job != nil {
+			if job.End > maxEndTime {
+				maxEndTime = job.End
+			}
+		}
+	}
+
+	fmt.Printf("part 2: %d\n", maxEndTime)
+
+}
+
+func (q *Queue) GetReadyJobs() []*Job {
+
+	ready := make([]string, 0)
+
+	running := make(map[string]bool)
+	for _, job := range q.GetRunningJobs() {
+		running[job.ID] = true
+	}
+
+	for jobStr, deps := range q.Deps {
+
+		if q.Done[jobStr] || running[jobStr] {
+			continue
+		}
+
+		notDone := 0
+		for _, dep := range deps {
+			if dep == jobStr {
 				continue
 			}
-			if workers[i] < doneTime {
-				fmt.Printf("changing worker i=%d seconds from %d to %d\n", i, workers[i], doneTime)
-				workers[i] = doneTime
+			if !q.Done[dep] {
+				notDone++
+				break
 			}
 		}
 
-		if len(readyJobs) == 0 {
-			fmt.Println("NO MORE JOBS TO DO")
-
-			// finish any running jobs
-			for workerIdx, job := range runningJob {
-				done[job] = true
-				delete(runningJob, workerIdx)
-				fmt.Printf("finished running job %s, worker=%d, time=%d\n", job, workerIdx, workers[workerIdx])
-			}
-
-			break QUEUE
+		if notDone == 0 {
+			ready = append(ready, jobStr)
 		}
 
 	}
-	// must be > 1006 and < 1029
-	// the worker with the most time is how long it took to complete all jobs
-	// (sort the workers -- the last one will have the most time)
-	sort.Ints(workers)
 
-	fmt.Printf("part 2: %d\n", workers[len(workers)-1])
-	for _, job := range jobs {
-		if !done[job] {
-			fmt.Printf("JOB NOT DONE: %s\n", job)
+	sort.Strings(ready)
+
+	jobs := make([]*Job, len(ready))
+
+	for i, jobStr := range ready {
+		jobs[i] = NewJob(jobStr)
+	}
+
+	return jobs
+}
+
+// GetWorker returns a worker that is the least busy (the smallest number of seconds worked)
+func (q *Queue) GetWorker() *Worker {
+	var worker *Worker
+	minSeconds := math.MaxInt32
+
+	for _, w := range q.Workers {
+		job := w.GetLastJob()
+		if job == nil {
+			return w
+		}
+
+		// don't pick a worker already running a job
+		if !job.Done {
+			continue
+		}
+
+		if job.End < minSeconds {
+			minSeconds = job.End
+			worker = w
 		}
 	}
 
+	return worker
+}
+
+func (w *Worker) AddJob(job *Job) {
+	w.Jobs = append(w.Jobs, job)
+}
+
+func (q *Queue) GetRunningJobs() []*Job {
+	jobs := make([]*Job, 0)
+	for _, worker := range q.Workers {
+		job := worker.GetLastJob()
+		if job == nil || job.Done {
+			continue
+		}
+		jobs = append(jobs, job)
+	}
+	return jobs
+}
+
+func (w *Worker) GetLastJob() *Job {
+	if len(w.Jobs) == 0 {
+		return nil
+	}
+	return w.Jobs[len(w.Jobs)-1]
 }
 
 // GetWorker returns the index of the worker that is least busy (the smallest number of seconds worked)
