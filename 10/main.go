@@ -53,18 +53,10 @@ func main() {
 CLOCK:
 	for clock := 1; ; clock++ {
 
-		var (
-			maxX = -math.MaxInt32
-			maxY = -math.MaxInt32
-			minX = math.MaxInt32
-			minY = math.MaxInt32
-		)
-
 		// The grid is a "sparse" matrix (it will only contain our actual points and no empty cells)
 		grid := make(Grid)
 
 		// store the presence of each point in the grid by their updated X,Y coordinates
-		// (keep track of the min/max X,Y coordinates so we know the grid size)
 		for _, p := range points {
 			// set the new location
 			p.X += p.VX
@@ -73,25 +65,9 @@ CLOCK:
 				grid[p.X] = make(map[int]bool)
 			}
 			grid[p.X][p.Y] = true
-
-			if p.X > maxX {
-				maxX = p.X
-			}
-
-			if p.Y > maxY {
-				maxY = p.Y
-			}
-
-			if p.X < minX {
-				minX = p.X
-			}
-
-			if p.Y < minY {
-				minY = p.Y
-			}
 		}
 
-		// Check each point to determine if it is a "single" point.
+		// Check each point in the grid to determine if it is a "single" point.
 		// (i.e., the point does not have a neighbor in any of its 8 adjacent cells).
 		// If the grid has a single point, then it can't be part of a valid letter.
 		for _, p := range points {
@@ -109,28 +85,17 @@ CLOCK:
 					}
 				}
 			}
+			// if one single point, there is no need to keep looking at the rest of the grid
 			if singleFound {
 				continue CLOCK
 			}
 		}
 
+		// This gird does NOT have *any* single points.
+		// It is *highly* likely it is the grid with the message.
+		// Time to print it out and see.
 		fmt.Println("part 1:")
-
-		// print grid
-		for y := minY; y <= maxY; y++ {
-			for x := minX; x <= maxX; x++ {
-				if _, ok := grid[x]; !ok {
-					fmt.Print(" ")
-					continue
-				}
-				if grid[x][y] {
-					fmt.Print("#")
-				} else {
-					fmt.Print(" ")
-				}
-			}
-			fmt.Println()
-		}
+		grid.Print()
 
 		fmt.Printf("part 2: %d\n", clock)
 
@@ -139,6 +104,46 @@ CLOCK:
 	}
 }
 
+func (g Grid) Print() {
+
+	// figure out the grid coordinates
+	var (
+		maxX = -math.MaxInt32
+		maxY = -math.MaxInt32
+		minX = math.MaxInt32
+		minY = math.MaxInt32
+	)
+
+	for x, rows := range g {
+		for y := range rows {
+			if x > maxX {
+				maxX = x
+			}
+			if y > maxY {
+				maxY = y
+			}
+			if x < minX {
+				minX = x
+			}
+			if y < minY {
+				minY = y
+			}
+		}
+	}
+
+	// print the grid
+	for y := minY; y <= maxY; y++ {
+		for x := minX; x <= maxX; x++ {
+			if g[x][y] {
+				fmt.Print("#")
+			} else {
+				fmt.Print(" ")
+			}
+		}
+		fmt.Println()
+	}
+
+}
 func readFile(path string) ([]string, error) {
 	if path == "" {
 		return nil, errors.New("file path not specified")
