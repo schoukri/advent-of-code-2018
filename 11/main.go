@@ -9,9 +9,6 @@ import (
 // Each fuel cell has a coordinate ranging from 1 to 300 in both the X (horizontal) and Y (vertical) direction.
 // In X,Y notation, the top-left cell is 1,1, and the top-right cell is 300,1.
 
-// The interface lets you select any 3x3 square of fuel cells. To increase your chances of getting to your destination,
-//  you decide to choose the 3x3 square with the largest total power.
-
 var (
 	minX = 1
 	maxX = 300
@@ -20,36 +17,32 @@ var (
 )
 
 // The power level in a given fuel cell can be found through the following process:
-
-// Find the fuel cell's rack ID, which is its X coordinate plus 10.
-// Begin with a power level of the rack ID times the Y coordinate.
-// Increase the power level by the value of the grid serial number (your puzzle input).
-// Set the power level to itself multiplied by the rack ID.
-// Keep only the hundreds digit of the power level (so 12345 becomes 3; numbers with no hundreds digit become 0).
-// Subtract 5 from the power level.
-
 func Power(x, y, gridSerial int) int {
 
+	// Find the fuel cell's rack ID, which is its X coordinate plus 10.
 	rackID := x + 10
 
+	// Begin with a power level of the rack ID times the Y coordinate.
 	power := rackID * y
+
+	// Increase the power level by the value of the grid serial number (your puzzle input).
 	power += gridSerial
+
+	// Set the power level to itself multiplied by the rack ID.
 	power *= rackID
 
+	// Keep only the hundreds digit of the power level (so 12345 becomes 3; numbers with no hundreds digit become 0).
 	if power < 100 {
-		return -5
+		power = 0
 	}
 
-	if power >= 10000 {
+	if power >= 1000 {
 		power %= 1000
-	}
-
-	for power >= 1000 {
-		power /= 10
 	}
 
 	power /= 100
 
+	// Subtract 5 from the power level.
 	return power - 5
 }
 
@@ -58,7 +51,6 @@ type Grid map[int]map[int]int
 func main() {
 
 	gridSerial := flag.Int("serial", 2694, "the grid serial number")
-	// part := flag.Int("part", 1, "the part of the challenge to run")
 	flag.Parse()
 
 	grid := make(Grid)
@@ -85,9 +77,9 @@ func main() {
 	}
 
 	minSize := 0
-	// maxSize := 2
 
-	var cellX, cellY, cellSize, maxPower int
+	var part1X, part1Y, part1Power int
+	var part2X, part2Y, part2Power, part2Size int
 
 	for CX := minX; CX <= maxX; CX++ {
 		for CY := minY; CY <= maxY; CY++ {
@@ -104,17 +96,14 @@ func main() {
 			}
 
 			sizePower := make(map[int]int)
-			sizeCount := make(map[int]int)
-			sumSizePower := make(map[int]int)
-			sumSizeCount := make(map[int]int)
 
+			// size can range from 0 - 299
+			// CX and CY can range from 1 - 300
 			for size := minSize; size <= maxSize; size++ {
 				// calculate total power for the row Y (for each cell of X)
 				for x := CX; x <= CX+size; x++ {
 					if power, ok := grid[x][CY+size]; ok {
 						sizePower[size] += power
-						sizeCount[size]++
-
 					} else {
 						log.Fatalf("no X grid coord at %d,%d (y = CY=%d + size=%d)\n", x, CY+size, CY, size)
 					}
@@ -124,48 +113,38 @@ func main() {
 				for y := CY; y < CY+size; y++ {
 					if power, ok := grid[CX+size][y]; ok {
 						sizePower[size] += power
-						sizeCount[size]++
 					} else {
 						log.Fatalf("no Y grid coord at %d,%d (x = CX=%d + size=%d)\n", CX+size, y, CX, size)
 					}
 				}
 
-				// add the new row and column power to the square's total power
-				for includeSize := minSize; includeSize <= size; includeSize++ {
-					sumSizePower[size] += sizePower[includeSize]
-					sumSizeCount[size] += sizeCount[includeSize]
+				// // add the previous size square's total power to our new row and columnn
+				if size > 0 {
+					sizePower[size] += sizePower[size-1]
 				}
 
-			}
-
-			thisMaxPower := 0
-			for size, power := range sumSizePower {
-				if power > maxPower {
-					maxPower = power
-					cellX = CX
-					cellY = CY
-					cellSize = size
-				}
-				if power > thisMaxPower {
-					thisMaxPower = power
+				if CX == 90 && CY == 269 && size == 15 && *gridSerial == 18 {
+					fmt.Printf("gridSerial 18 example: 90,269,16 (expected power=113, actual power=%d)\n", sizePower[size])
+				} else if CX == 232 && CY == 251 && size == 11 && *gridSerial == 42 {
+					fmt.Printf("gridSerial 42 example: 232,251,12 (expected power=119, actual power=%d)\n", sizePower[size])
 				}
 
-			}
+				if sizePower[size] > part1Power && size == 2 {
+					part1X = CX
+					part1Y = CY
+					part1Power = sizePower[size]
+				}
+				if sizePower[size] > part2Power {
+					part2X = CX
+					part2Y = CY
+					part2Size = size
+					part2Power = sizePower[size]
+				}
 
-			for size := minSize; size <= maxSize; size++ {
-				fmt.Printf("CELL\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%v\n",
-					CX, CY, size+1,
-					sizeCount[size], sumSizeCount[size],
-					sizePower[size], sumSizePower[size],
-					thisMaxPower, maxPower, thisMaxPower == maxPower,
-				)
 			}
 		}
 	}
 
-	fmt.Printf("grid[1][1] power: %d\n", grid[1][1])
-	fmt.Printf("totalPower: %d\n", totalPower)
-
-	//fmt.Printf("part 1: %d,%d (%d)\n", cellX, cellY, maxPower)
-	fmt.Printf("part 2: %d,%d,%d (%d)\n", cellX, cellY, cellSize+1, maxPower)
+	fmt.Printf("part 1: %d,%d (%d)\n", part1X, part1Y, part1Power)
+	fmt.Printf("part 2: %d,%d,%d (%d)\n", part2X, part2Y, part2Size+1, part2Power)
 }
