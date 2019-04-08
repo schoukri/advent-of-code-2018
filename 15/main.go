@@ -115,19 +115,26 @@ func (grid Grid) getPaths(start, end *Piece, path Path, paths []Path) []Path {
 	for _, piece := range path {
 		seen[*piece] = true
 	}
+	nextRound := make([]*Piece, 0)
 	for _, open := range grid.OpenSquares(start) {
 		if _, ok := seen[*open]; ok {
 			continue
 		}
+		if open.X == end.X && open.Y == end.Y {
+			path = append(path, open)
+			paths = append(paths, path)
+			return paths
+		}
+		nextRound = append(nextRound, open)
+	}
+
+	for _, open := range nextRound {
 		pathCopy := make(Path, len(path))
 		copy(pathCopy, path)
 		pathCopy = append(pathCopy, open)
-		if open.X == end.X && open.Y == end.Y {
-			paths = append(paths, pathCopy)
-		} else {
-			paths = grid.getPaths(open, end, pathCopy, paths)
-		}
+		paths = grid.getPaths(open, end, pathCopy, paths)
 	}
+
 	return paths
 }
 
