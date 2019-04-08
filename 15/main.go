@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"sort"
 	"strings"
@@ -78,11 +79,18 @@ ROUND:
 				break ROUND
 			}
 
+			minPath := math.MaxInt32
 			allPaths := make(Paths, 0)
 			for _, target := range targets {
 				for _, open := range grid.OpenSquares(target) {
-					paths := grid.GetPaths(unit, open)
-					allPaths = append(allPaths, paths...)
+					paths := grid.GetPaths(unit, open, minPath)
+					if len(paths) > 0 {
+						sort.Sort(ByShortestPath(paths))
+						if len(paths[0]) < minPath {
+							minPath = len(paths[0])
+						}
+						allPaths = append(allPaths, paths...)
+					}
 				}
 			}
 
@@ -104,13 +112,14 @@ ROUND:
 
 }
 
-func (grid Grid) GetPaths(start, end *Piece) Paths {
+func (grid Grid) GetPaths(start, end *Piece, minPath int) Paths {
 	path := make(Path, 0)
 	paths := make([]Path, 0)
-	return grid.getPaths(start, end, path, paths)
+	//minPath := math.MaxInt32
+	return grid.getPaths(start, end, minPath, path, paths)
 }
 
-func (grid Grid) getPaths(start, end *Piece, path Path, paths []Path) []Path {
+func (grid Grid) getPaths(start, end *Piece, minPath int, path Path, paths []Path) []Path {
 	seen := make(map[Piece]bool)
 	for _, piece := range path {
 		seen[*piece] = true
@@ -122,19 +131,45 @@ func (grid Grid) getPaths(start, end *Piece, path Path, paths []Path) []Path {
 		}
 		if open.X == end.X && open.Y == end.Y {
 			path = append(path, open)
+			if len(path) < minPath {
+				minPath = len(path)
+			}
 			paths = append(paths, path)
 			return paths
 		}
-		nextRound = append(nextRound, open)
+		if len(path) <= minPath {
+			nextRound = append(nextRound, open)
+		}
 	}
 
 	for _, open := range nextRound {
 		pathCopy := make(Path, len(path))
 		copy(pathCopy, path)
 		pathCopy = append(pathCopy, open)
-		paths = grid.getPaths(open, end, pathCopy, paths)
+		paths = grid.getPaths(open, end, minPath, pathCopy, paths)
 	}
 
+	return paths
+}
+
+func (grid Grid) getPathsOne(start, end *Piece, path Path, paths []Path) []Path {
+	seen := make(map[Piece]bool)
+	for _, piece := range path {
+		seen[*piece] = true
+	}
+	for _, open := range grid.OpenSquares(start) {
+		if _, ok := seen[*open]; ok {
+			continue
+		}
+		pathCopy := make(Path, len(path))
+		copy(pathCopy, path)
+		pathCopy = append(pathCopy, open)
+		if open.X == end.X && open.Y == end.Y {
+			paths = append(paths, pathCopy)
+		} else {
+			paths = grid.getPathsOne(open, end, pathCopy, paths)
+		}
+	}
 	return paths
 }
 
