@@ -20,8 +20,9 @@ const (
 )
 
 type Piece struct {
-	Type      Type
-	HitPoints int
+	Type        Type
+	HitPoints   int
+	AttackPower int
 }
 
 type Node struct {
@@ -40,7 +41,8 @@ type Path []*Node
 func main() {
 
 	filePath := flag.String("file", "input.txt", "file containing the input data")
-	//part := flag.Int64("part", 1, "The part of the puzzle to run.")
+	part := flag.Int("part", 1, "The part of the puzzle to run.")
+	power := flag.Int("power", 3, "The attack power for Elves (for part 2 only).")
 	flag.Parse()
 
 	lines, err := readFile(*filePath)
@@ -49,6 +51,15 @@ func main() {
 	}
 
 	graph := NewGraph(lines)
+
+	// if part 2, increase the attack power for Elves
+	if *part == 2 && *power > 3 {
+		for _, node := range graph.Nodes {
+			if node.Piece != nil && node.Piece.Type == TypeElf {
+				node.Piece.AttackPower = *power
+			}
+		}
+	}
 
 ROUND:
 	for round := 1; ; round++ {
@@ -72,13 +83,13 @@ ROUND:
 			}
 
 			// if the unit is already in range of another unit, attack it (and don't move)
-			if graph.AttackInRangeTarget(unit) {
+			if graph.AttackInRangeTarget(unit, *part) {
 				continue
 			}
 
 			targets := graph.Targets(unit)
 			if len(targets) == 0 {
-				fmt.Printf("part 1: %d\n", graph.TotalHitPoints()*(round-1))
+				fmt.Printf("part %d: %d\n", *part, graph.TotalHitPoints()*(round-1))
 				break ROUND
 			}
 
@@ -105,7 +116,7 @@ ROUND:
 			graph.Move(unit, dest)
 
 			// launch attack if the move put this piece in range of another
-			graph.AttackInRangeTarget(dest)
+			graph.AttackInRangeTarget(dest, *part)
 		}
 	}
 }
@@ -205,7 +216,7 @@ func (g *Graph) Adjacent(node *Node) []*Node {
 	return nodes
 }
 
-func (g *Graph) AttackInRangeTarget(node *Node) bool {
+func (g *Graph) AttackInRangeTarget(node *Node, part int) bool {
 	if node.Piece == nil {
 		log.Fatalf("node piece is empty: %+v", node)
 	}
@@ -226,10 +237,13 @@ func (g *Graph) AttackInRangeTarget(node *Node) bool {
 	target := targets[0]
 
 	// attack!!!
-	target.Piece.HitPoints -= 3
+	target.Piece.HitPoints -= node.Piece.AttackPower
 
 	// if the target piece has zero or fewer hit points, it dies
 	if target.Piece.HitPoints <= 0 {
+		if part == 2 && target.Piece.Type == TypeElf {
+			log.Fatalln("An elf has been killed in part 2!")
+		}
 		target.Piece = nil
 	}
 
@@ -353,8 +367,9 @@ func NewGraph(lines []string) *Graph {
 				continue
 			}
 			piece := &Piece{
-				Type:      Type(char),
-				HitPoints: 200,
+				Type:        Type(char),
+				HitPoints:   200,
+				AttackPower: 3,
 			}
 			node.Piece = piece
 		}
